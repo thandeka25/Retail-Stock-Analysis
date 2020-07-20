@@ -54,7 +54,7 @@ comDF <- bind_rows(uniqloDF, luluDF) %>% bind_rows(., shopDF) %>%
 ###4. Transform data to create an end of month table
 *The dataframe for the <strong>last day</strong> of trading information is extracted by group the data by `Year` and `Date`. Then the data is filtered (select observations meeting condition) to extract the rows with the last date of the month. Lastly, the `Close` column is extracted.
 *The dataframe for <strong>first day</strong> follows the same process as that of first day. The main differences are that the rows with the lowest date value for each month and the `Open` column are extracted.
-*The dataframe for <strong>total volume/strong> for each month is extracted by using the same grouping formula as above. thereafter each grouping is summarized by finding the total volume for each grouping.
+*The dataframe for <strong>total volume</strong> for each month is extracted by using the same grouping formula as above. thereafter each grouping is summarized by finding the total volume for each grouping.
 *The <strong> combined monthly data </strong> data frame is constructed by joining the three previous data frames by using the `inner_join` function. The parameters for the join are `Year`, `Month` and `Stock`. Two additional columns are added that calculate the increase in stock price and the percentage increase in stock price.
 ```{r}
 
