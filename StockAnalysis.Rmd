@@ -1,0 +1,169 @@
+---
+title: "Stock Analysis"
+author: "Thandeka Chehore"
+date: "7/20/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#Retail Stock Analysis
+
+###1. Import required packages
+
+```{r echo=T, results='hide', message=FALSE}
+pckg <- c("rio", "lubridate", "tidyverse", "plotly")
+lapply(pckg, require, character.only=TRUE)
+```
+
+###2. Import the data
+I could not get quantmod to work hence I had to do it manually. The `Date` column was imported as a character but then changed into a date format. Another column was added called `Stock` that held the ticker symbol for each stock being imported.
+
+<em>The naming convention[^1]  is the name of the stock followed by 'DF' </em>
+[^1]: I am using camel case for naming the rest of objects.
+```{r}
+uniqloDF <- rio::import("Stock/FRCOY.csv") %>% filter(Open != 'null') %>%  #uniqlo
+  mutate(Date = as.Date(Date)) %>% mutate(Stock = "FRCOY")
+luluDF <- rio::import("Stock/LULU.csv") %>% filter(Open != 'null') %>%    #Lululemon
+  mutate(Date = as.Date(Date)) %>% mutate(Stock = "LULU")
+shopDF <- rio::import("Stock/SHOP.csv") %>% filter(Open != 'null') %>%    #Shopify
+  mutate(Date = as.Date(Date)) %>% mutate(Stock = "SHOP")         
+wmtDF <- rio::import("Stock/WMT.csv") %>% filter(Open != 'null') %>%     #Walmart
+  mutate(Date = as.Date(Date)) %>% mutate(Stock = "WMT")
+tgtDF <- rio::import("Stock/TGT.csv") %>% filter(Open != 'null') %>%     #Target
+  mutate(Date = as.Date(Date)) %>% mutate(Stock = "TGT")
+costDF <- rio::import("Stock/COST.csv") %>% filter(Open != 'null') %>%     #Costco
+  mutate(Date = as.Date(Date)) %>% mutate(Stock = "COST")
+```
+
+####3. Bind rows to create a combined data frame
+Rows are binded in a nested format, making use of the `bind_rows(., df` syntax.
+```{r}
+#bind rows to create a combined data frame
+comDF <- bind_rows(uniqloDF, luluDF) %>% bind_rows(., shopDF) %>% 
+  bind_rows(., wmtDF) %>% bind_rows(., tgtDF) %>% bind_rows(., costDF) %>% 
+  mutate(Stck = as.factor(Stock))
+```
+
+###4. Transform data to create an end of month table
+*The dataframe for the <strong>last day</strong> of trading information is extracted by group the data by `Year` and `Date`. Then the data is filtered (select observations meeting condition) to extract the rows with the last date of the month. Lastly, the `Close` column is extracted.
+*The dataframe for <strong>first day</strong> follows the same process as that of first day. The main differences are that the rows with the lowest date value for each month and the `Open` column are extracted.
+*The dataframe for <strong>total volume/strong> for each month is extracted by using the same grouping formula as above. thereafter each grouping is summarized by finding the total volume for each grouping.
+*The <strong> combined monthly data </strong> data frame is constructed by joining the three previous data frames by using the `inner_join` function. The parameters for the join are `Year`, `Month` and `Stock`. Two additional columns are added that calculate the increase in stock price and the percentage increase in stock price.
+```{r}
+
+#last day data
+lastDay <- comDF   %>% group_by(Year=year(Date), Month=month(Date), Stock) %>% 
+  filter(Date == max(Date)) %>% 
+  select(Close)
+#first day data
+firstDay <- comDF   %>% group_by(Year=year(Date), Month=month(Date), Stock) %>% 
+  filter(Date == min(Date)) %>% 
+  select(Open)
+#monthly volume data
+monthVol <- comDF %>% group_by(Year=year(Date), Month=month(Date), Stock) %>%summarise(TotVolume = sum(Volume))
+#combined end of month data
+monthData <- inner_join(lastDay, firstDay, by = c( 'Year', 'Month', 'Stock' )) %>% 
+  inner_join(., monthVol, by = c( 'Year', 'Month', 'Stock' ))   %>% 
+  mutate(Incr = Close - Open) %>% 
+  mutate(PercInc = 100*Incr/Open)
+```
+
+###5. Exploratory analysis based on volume and monthly price change
+The monthly data is grouped by stock and the observations that meet the conditions are filtered out. Using the `arrange` function, they are placed in either descending or ascending order. The default is ascending. </br>
+<em>The `topN` variable is used to input how many of the top results to view. </em>
+```{r}
+topN <- as.integer(5) 
+#stocks and their biggest increase in a month
+monthData %>% group_by(Stock) %>% filter(PercInc == max(PercInc)) %>% 
+  arrange(desc(PercInc)) %>% top_n(topN, PercInc)
+
+#stocks and their highest volume in a month
+monthData %>% group_by(Stock) %>% filter(TotVolume == max(TotVolume)) %>% 
+  arrange(desc(TotVolume)) %>% top_n(topN, TotVolume)
+monthData %>% group_by(Stock) %>% filter(TotVolume == min(TotVolume)) %>% 
+  arrange(TotVolume) %>% top_n(topN, TotVolume)
+```
+
+###6. get maximum deviation from five year average volume
+We are interested in seeing which stocks deviated (monthly volume higher than five year average) from the five year average monthly volume. We also wanna see the difference in stock value for these specific stocks
+```{r}
+topN <- as.integer(12) 
+comDF %>% mutate(DiffPrice = Close - Open)  %>% mutate(DiffPricePerc = 100*DiffPrice/Open)  %>%  
+  group_by(Stock) %>% mutate(AverageVolume = mean(Volume)) %>% 
+  mutate(DiffVolume = Volume - AverageVolume) %>% mutate(DiffVolumePerc = 100*DiffVolume/AverageVolume) %>%
+  arrange(desc(DiffVolume)) %>% top_n(topN, DiffVolume)
+```
+
+
+###7.1. Candlestick chart with moving averages (manual)
+In this step I am creating a candle stick plot with an overlay of the moving average. I am also plotting beneath it a volume plot over the same time frame. </br>
+1. The first step is to create a moving average formula using the `stats::filter` function. The parameters are the vector of interest and the days over which to average. </br>2.  The next step is to create the levers that we wish to be changed when viewing the plot. The chosen levers are the start date and end date, as well as the number of days for the moving average </br>
+3. The candlestick plot is rendered using `plot_ly` function from the <em>plotly</em> package. Whenever there is an increase between two preceeding dates, the plot colour is green, and the plot colour is blue for decreases. The `add_lines` function is used to add an overlay of the moving average line. The beginning and end axis are stipulated using the levers.<br>
+4. The volume plot is a plot of bar plot of the monthly volume versus the dates. </br>
+5. The plots are combined using `subplot`[^2] function. The heights parameter determines the fractio of space taken up by each plot.</br>
+
+[^2]: works for tibble, plotly and ggplot2 objects.
+```{r message=FALSE, warning=FALSE}
+#1 moving average formula
+mAverage <-  function(x, n){stats::filter(x, rep(1 / n, n), sides = 2)}
+
+
+#2 levers
+StartDate <- "2017-02-26"
+endDate <- "2019-02-25"
+dayNum <-30
+
+#3 candlestick plot
+pricePlot <- uniqloDF %>% plot_ly(x = ~Date, type="candlestick",
+               open = ~Open, close = ~Close,
+               high = ~High, low = ~Low, 
+               increasing = list(line = list(color = 'green')), 
+               decreasing=list(line = list(color = 'blue')) )%>% 
+  layout(title = "Uniqlo Candlestick Chart", 
+         xaxis = list(range = c(StartDate, endDate)))  %>%
+  add_lines(y = mAverage(uniqloDF$Close, dayNum), x = uniqloDF$Date, name = 'moving average', color = I('red'))
+#4 volume plot
+volPlot <- uniqloDF %>% plot_ly(x = ~Date, y = ~Volume, name = 'Volume', type = 'bar') %>%
+  layout(yaxis = list(title = "Volume"))
+# combined plot
+subplot(pricePlot, volPlot, heights = c(0.5,0.3), nrows=2, shareX = TRUE, titleY = TRUE) %>%
+  layout(legend = list(orientation = 'h', x = 0.7, y = 1, bgcolor = 'transparent',
+                       xanchor = 'center', font = list(size = 12)))
+```
+
+###7.2 Candlestick chart with moving averages (function format)
+The process in 7.1 is repeated but it is placed in a function and there is added functionlity to the moving average function. <br/>
+An `ifelse` statement is used to toggle between the two possible states of the moving average function. Setting k=1, results in a assymetrical moving function and setting k=2 results in symmetrical moving function. But to make up for any other number being place in the formula, the symmetrical option is used for k is not equal to 1.
+
+```{r message=FALSE, , warning=FALSE}
+### Stock candlestick chat plotting function ####
+stockPlot <- function(df, startDate, endDate, dayNum, k=2) {
+  #moving average function
+  ifelse(k==1,  mAverage <-  function(x, n){stats::filter(x, rep(1 / n, n), sides = 1)}, mAverage <-  function(x, n){stats::filter(x, rep(1 / n, n), sides = 2)} )
+  
+  #candlestick plot
+  pricePlot <- df %>% plot_ly(x = ~Date, type="candlestick",
+                                      open = ~Open, close = ~Close,
+                                      high = ~High, low = ~Low, 
+                                      increasing = list(line = list(color = 'green')), 
+                                      decreasing=list(line = list(color = 'blue')) )%>% 
+    layout(title = "Candlestick Chart", 
+           xaxis = list(range = c(startDate, endDate)))  %>%
+    add_lines(y = mAverage(df$Close, dayNum), x = df$Date, name = 'moving average', color = I('red'))
+  
+  #volume plot
+  volPlot <- df %>% plot_ly(x = ~Date, y = ~Volume, name = 'Volume', type = 'bar') %>%
+    layout(yaxis = list(title = "Volume"))
+  
+  #combined plot
+  subplot(pricePlot, volPlot, heights = c(0.5,0.3), nrows=2, shareX = TRUE, titleY = TRUE) %>%
+    layout(legend = list(orientation = 'h', x = 0.7, y = 1, bgcolor = 'transparent',
+                         xanchor = 'center', font = list(size = 12)))
+}
+
+#test function
+stockPlot(luluDF, "2016-02-26", "2019-02-25", 30)
+```
+

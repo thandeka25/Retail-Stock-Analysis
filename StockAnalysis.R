@@ -5,17 +5,17 @@ require(tidyverse)
 require(plotly)
 
 #import the datasets, remove null values and 
-uniqloDF <- rio::import("FRCOY.csv") %>% filter(Open != 'null') %>%  #uniqlo
+uniqloDF <- rio::import("Stock/FRCOY.csv") %>% filter(Open != 'null') %>%  #uniqlo
   mutate(Date = as.Date(Date)) %>% mutate(Stock = "UNIQ")
-luluDF <- rio::import("LULU.csv") %>% filter(Open != 'null') %>%    #Lululemon
+luluDF <- rio::import("Stock/LULU.csv") %>% filter(Open != 'null') %>%    #Lululemon
   mutate(Date = as.Date(Date)) %>% mutate(Stock = "LULU")
-shopDF <- rio::import("SHOP.csv") %>% filter(Open != 'null') %>%    #Shopify
+shopDF <- rio::import("Stock/SHOP.csv") %>% filter(Open != 'null') %>%    #Shopify
   mutate(Date = as.Date(Date)) %>% mutate(Stock = "SHOP")         
-wmtDF <- rio::import("WMT.csv") %>% filter(Open != 'null') %>%     #Walmart
+wmtDF <- rio::import("Stock/WMT.csv") %>% filter(Open != 'null') %>%     #Walmart
   mutate(Date = as.Date(Date)) %>% mutate(Stock = "WMT")
-tgtDF <- rio::import("TGT.csv") %>% filter(Open != 'null') %>%     #Target
+tgtDF <- rio::import("Stock/TGT.csv") %>% filter(Open != 'null') %>%     #Target
   mutate(Date = as.Date(Date)) %>% mutate(Stock = "TGT")
-costDF <- rio::import("COST.csv") %>% filter(Open != 'null') %>%     #Costco
+costDF <- rio::import("Stock/COST.csv") %>% filter(Open != 'null') %>%     #Costco
   mutate(Date = as.Date(Date)) %>% mutate(Stock = "COST")
 
 #bind rows to create a combined data frame
