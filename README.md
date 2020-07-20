@@ -1,2 +1,2 @@
 # Retail-Stock-Analysis
- anlysis of retail stocks
+ exploratory analysis of retail stocks
